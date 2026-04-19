@@ -99,6 +99,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 path.addEventListener('click', () => handleMapClick(path));
             });
 
+            // Initialize panzoom
+            const svgElement = mapContainer.querySelector('svg');
+            if (typeof panzoom !== 'undefined' && svgElement) {
+                // Ensure the map container has touch-action: none so the browser doesn't try to scroll the page while panning
+                mapContainer.style.touchAction = 'none';
+
+                const pz = panzoom(svgElement, {
+                    maxZoom: 10,
+                    minZoom: 0.8,
+                    bounds: true,
+                    boundsPadding: 0.2
+                });
+
+                // Calculate center on Spain (~ x=448, y=205 on a 950x620 viewBox)
+                const width = mapContainer.clientWidth;
+                const height = mapContainer.clientHeight;
+                const initialZoom = 4;
+
+                const spainX = width * (448 / 950);
+                const spainY = height * (205 / 620);
+                
+                const dx = width / 2 - spainX * initialZoom;
+                const dy = height / 2 - spainY * initialZoom;
+
+                pz.zoomAbs(0, 0, initialZoom);
+                pz.moveTo(dx, dy);
+            }
+
             startPolling();
         } catch (err) {
             console.error('Failed to load map:', err);
