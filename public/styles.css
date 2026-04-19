@@ -619,16 +619,70 @@ footer {
 /* Responsive adjustments */
 @media (max-width: 600px) {
     .glass-container {
-        padding: 1.5rem;
+        padding: 1rem;
     }
     
     header {
         flex-direction: column;
         gap: 1rem;
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 1.8rem;
     }
     
-    .hero h2 {
-        font-size: 2rem;
+    .logo {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .tabs-nav {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .tab-btn {
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+        flex: 1 1 auto;
+        text-align: center;
+    }
+
+    .rank-card {
+        padding: 1rem;
+        flex-direction: row; /* keep row but reduce sizes */
+        gap: 0.5rem;
+    }
+
+    .rank-avatar {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .rank-name {
+        font-size: 1.1rem;
+    }
+    
+    .rank-points {
+        font-size: 1.5rem;
+    }
+
+    .rank-medal {
+        font-size: 1.8rem;
+    }
+
+    .activity-card {
+        padding: 1rem;
+        gap: 0.75rem;
+    }
+    
+    .login-box {
+        padding: 1.5rem;
+    }
+    
+    .winner-modal-box {
+        padding: 1.5rem;
     }
 }
 
