@@ -4,47 +4,122 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUser = null;
     let pollInterval = null;
 
-    // -- Authentication Logic --
-    const loginOverlay = document.getElementById('login-overlay');
-    const appContainer = document.getElementById('app-container');
-    const logoutBtn = document.getElementById('logout-btn');
+    // -- Auth helpers --
+    function getToken() { return localStorage.getItem('lolivaToken'); }
 
-    // Check if previously logged in this session/local
-    const savedUser = sessionStorage.getItem('stellarUser');
-    if (savedUser) {
-        authenticate(savedUser);
+    async function authFetch(url, options = {}) {
+        const headers = { ...(options.headers || {}), 'Authorization': `Bearer ${getToken()}` };
+        const res = await fetch(url, { ...options, headers });
+        if (res.status === 401) {
+            logout();
+            throw new Error('Unauthorized');
+        }
+        return res;
     }
 
-    document.querySelectorAll('.login-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const user = e.target.getAttribute('data-user');
-            authenticate(user);
-        });
-    });
-
-    logoutBtn.addEventListener('click', () => {
-        sessionStorage.removeItem('stellarUser');
+    function logout() {
+        localStorage.removeItem('lolivaToken');
+        localStorage.removeItem('lolivaUser');
         currentUser = null;
         if (pollInterval) clearInterval(pollInterval);
         appContainer.style.display = 'none';
         loginOverlay.style.display = 'flex';
+        showLoginStep1();
+    }
+
+    // -- Authentication Logic --
+    const loginOverlay   = document.getElementById('login-overlay');
+    const appContainer   = document.getElementById('app-container');
+    const logoutBtn      = document.getElementById('logout-btn');
+    const loginStep1     = document.getElementById('login-step-1');
+    const loginStep2     = document.getElementById('login-step-2');
+    const loginPassword  = document.getElementById('login-password');
+    const loginConfirm   = document.getElementById('login-confirm-btn');
+    const loginError     = document.getElementById('login-error');
+    const loginBackBtn   = document.getElementById('login-back-btn');
+    const loginLabel     = document.getElementById('login-selected-label');
+
+    let pendingLoginUser = null;
+
+    function showLoginStep1() {
+        loginStep1.style.display = 'flex';
+        loginStep2.style.display = 'none';
+        loginError.style.display = 'none';
+        loginPassword.value = '';
+        pendingLoginUser = null;
+    }
+
+    function showLoginStep2(user) {
+        pendingLoginUser = user;
+        const names = { al: 'Al Pacino Gazpachino', pep: 'Pepinillo Aceitunillo' };
+        loginLabel.textContent = names[user] || user;
+        loginStep1.style.display = 'none';
+        loginStep2.style.display = 'block';
+        loginError.style.display = 'none';
+        loginPassword.value = '';
+        setTimeout(() => loginPassword.focus(), 50);
+    }
+
+    async function submitLogin() {
+        if (!pendingLoginUser) return;
+        const password = loginPassword.value;
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: pendingLoginUser, password })
+            });
+            if (!res.ok) {
+                loginError.style.display = 'block';
+                loginPassword.value = '';
+                loginPassword.focus();
+                return;
+            }
+            const { token, user } = await res.json();
+            localStorage.setItem('lolivaToken', token);
+            localStorage.setItem('lolivaUser', user);
+            enterApp(user);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    document.querySelectorAll('.login-btn').forEach(btn => {
+        btn.addEventListener('click', () => showLoginStep2(btn.getAttribute('data-user')));
     });
 
-    function authenticate(user) {
+    loginConfirm.addEventListener('click', submitLogin);
+    loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLogin(); });
+    loginBackBtn.addEventListener('click', showLoginStep1);
+
+    logoutBtn.addEventListener('click', logout);
+
+    function enterApp(user) {
         currentUser = user;
-        sessionStorage.setItem('stellarUser', user);
         loginOverlay.style.display = 'none';
         appContainer.style.display = 'block';
-        
+
         if (document.querySelector('#home-view').classList.contains('active')) {
             fetchNextActivity();
             fetchScores();
         }
-
-        // If map was already open, trigger a fetch
         if (document.querySelector('#map-container svg')) {
             startPolling();
         }
+    }
+
+    // Auto-login from saved token
+    const savedToken = localStorage.getItem('lolivaToken');
+    const savedUser  = localStorage.getItem('lolivaUser');
+    if (savedToken && savedUser) {
+        fetch('/api/me', { headers: { 'Authorization': `Bearer ${savedToken}` } })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (data && data.user) {
+                    enterApp(data.user);
+                }
+            })
+            .catch(() => {});
     }
 
 
@@ -65,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetContent = document.getElementById(targetId);
             targetContent.classList.add('active');
             targetContent.style.display = '';
-            
+
             if (targetId === 'map-view') {
                 if (!document.querySelector('#map-container svg')) {
                     loadMap();
@@ -109,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dx = e.changedTouches[0].clientX - touchStartX;
                     const dy = e.changedTouches[0].clientY - touchStartY;
                     if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-                        e.preventDefault(); // prevent duplicate click event
+                        e.preventDefault();
                         handleMapClick(path);
                     }
                 });
@@ -118,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Initialize panzoom
             const svgElement = mapContainer.querySelector('svg');
             if (typeof panzoom !== 'undefined' && svgElement) {
-                // Ensure the map container has touch-action: none so the browser doesn't try to scroll the page while panning
                 mapContainer.style.touchAction = 'none';
 
                 const pz = panzoom(svgElement, {
@@ -128,15 +202,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     boundsPadding: 0.2
                 });
 
-                // Calculate center on Spain (~ x=448, y=205 on a 950x620 viewBox)
-                const width = mapContainer.clientWidth;
+                const width  = mapContainer.clientWidth;
                 const height = mapContainer.clientHeight;
                 const initialZoom = 4;
 
-                const spainX = width * (448 / 950);
+                const spainX = width  * (448 / 950);
                 const spainY = height * (205 / 620);
-                
-                const dx = width / 2 - spainX * initialZoom;
+
+                const dx = width  / 2 - spainX * initialZoom;
                 const dy = height / 2 - spainY * initialZoom;
 
                 pz.zoomAbs(0, 0, initialZoom);
@@ -156,10 +229,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!countryId) return;
 
         try {
-            const res = await fetch('/api/click', {
+            const res = await authFetch('/api/click', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: currentUser, countryId: countryId })
+                body: JSON.stringify({ countryId })
             });
             const data = await res.json();
             renderMapState(data);
@@ -171,21 +244,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function startPolling() {
         if (pollInterval) clearInterval(pollInterval);
         fetchMapState();
-        if (typeof fetchActivities === 'function') fetchActivities();
         fetchNextActivity();
-        if (typeof fetchScores === 'function') fetchScores();
-        
+        fetchScores();
+
         pollInterval = setInterval(() => {
             fetchMapState();
-            if (typeof fetchActivities === 'function') fetchActivities();
             fetchNextActivity();
-            if (typeof fetchScores === 'function') fetchScores();
+            fetchScores();
         }, 3000);
     }
 
     async function fetchMapState() {
         try {
-            const res = await fetch('/api/map');
+            const res = await authFetch('/api/map');
             const data = await res.json();
             renderMapState(data);
         } catch (e) {
@@ -194,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderMapState(state) {
-        const alList = state.al || [];
+        const alList  = state.al  || [];
         const pepList = state.pep || [];
 
         const paths = document.querySelectorAll('#map-container svg path, #map-container svg polygon');
@@ -202,27 +273,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const id = path.getAttribute('id');
             if (!id) return;
 
-            const isAl = alList.includes(id);
+            const isAl  = alList.includes(id);
             const isPep = pepList.includes(id);
 
-            // Reset classes
             path.classList.remove('selected', 'selected-al', 'selected-pep', 'selected-both');
 
-            if (isAl && isPep) {
-                path.classList.add('selected-both');
-            } else if (isAl) {
-                path.classList.add('selected-al');
-            } else if (isPep) {
-                path.classList.add('selected-pep');
-            }
+            if (isAl && isPep)   path.classList.add('selected-both');
+            else if (isAl)       path.classList.add('selected-al');
+            else if (isPep)      path.classList.add('selected-pep');
         });
     }
 
     // -- Actividades Logic --
 
-    // Collapsible form toggle
     const toggleFormBtn = document.getElementById('toggle-form-btn');
-    const formPanel = document.getElementById('activity-form-panel');
+    const formPanel     = document.getElementById('activity-form-panel');
     if (toggleFormBtn && formPanel) {
         toggleFormBtn.addEventListener('click', () => {
             const isOpen = formPanel.style.display !== 'none';
@@ -238,25 +303,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const titleInput  = document.getElementById('activity-title');
             const descInput   = document.getElementById('activity-desc');
             const puntosInput = document.getElementById('activity-puntos');
-            
-            const titulo     = titleInput.value.trim();
+
+            const titulo      = titleInput.value.trim();
             const descripcion = descInput.value.trim();
-            const puntos     = parseInt(puntosInput.value, 10);
-            
+            const puntos      = parseInt(puntosInput.value, 10);
+
             if (!titulo || !descripcion || !puntos || puntos < 1) return;
-            
+
             try {
-                const res = await fetch('/api/activity', {
+                const res = await authFetch('/api/activity', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user: currentUser, titulo, descripcion, puntos })
+                    body: JSON.stringify({ titulo, descripcion, puntos })
                 });
-                
+
                 if (res.ok) {
                     titleInput.value  = '';
                     descInput.value   = '';
                     puntosInput.value = '';
-                    // Collapse form after submit
                     formPanel.style.display = 'none';
                     toggleFormBtn.classList.remove('open');
                     fetchActivities();
@@ -269,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchActivities() {
         try {
-            const res = await fetch('/api/activities');
+            const res  = await authFetch('/api/activities');
             const data = await res.json();
             renderActivities(data);
         } catch (e) {
@@ -279,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchNextActivity() {
         try {
-            const res = await fetch('/api/next_activity');
+            const res = await authFetch('/api/next_activity');
             const act = await res.json();
             renderNextActivityBanner(act);
         } catch (e) {
@@ -288,14 +352,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderNextActivityBanner(act) {
-        const banner = document.getElementById('next-activity-banner');
+        const banner  = document.getElementById('next-activity-banner');
         const titleEl = document.getElementById('next-activity-title');
-        const descEl = document.getElementById('next-activity-desc');
+        const descEl  = document.getElementById('next-activity-desc');
         if (!banner || !titleEl || !descEl) return;
 
         if (act && act.status !== 'done') {
             titleEl.textContent = act.titulo;
-            descEl.textContent = act.descripcion;
+            descEl.textContent  = act.descripcion;
             banner.style.display = 'block';
         } else {
             banner.style.display = 'none';
@@ -303,7 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -- Winner Modal Logic --
-    const winnerModal   = document.getElementById('winner-modal');
+    const winnerModal    = document.getElementById('winner-modal');
     const winnerModalPts = document.getElementById('winner-modal-pts');
     const winnerCancelBtn = document.getElementById('winner-modal-cancel');
     let _pendingToggleId = null;
@@ -319,9 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         _pendingToggleId = null;
     }
 
-    if (winnerCancelBtn) {
-        winnerCancelBtn.addEventListener('click', closeWinnerModal);
-    }
+    if (winnerCancelBtn) winnerCancelBtn.addEventListener('click', closeWinnerModal);
     if (winnerModal) {
         winnerModal.addEventListener('click', (e) => {
             if (e.target === winnerModal) closeWinnerModal();
@@ -333,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const winner = btn.getAttribute('data-winner');
             if (!_pendingToggleId || !winner) return;
             try {
-                const res = await fetch('/api/activity/toggle', {
+                const res = await authFetch('/api/activity/toggle', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id: _pendingToggleId, winner })
@@ -353,28 +415,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderActivities(activitiesList) {
         const feedContainer = document.getElementById('activity-feed');
         if (!feedContainer) return;
-        
+
         feedContainer.innerHTML = '';
-        
+
         if (activitiesList.length === 0) {
             feedContainer.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">No hay actividades todavía.</p>';
             return;
         }
 
-        // Sort: pending first, done last
         const sorted = [...activitiesList].sort((a, b) => {
             if (a.status === b.status) return 0;
             return a.status === 'pending' ? -1 : 1;
         });
 
         sorted.forEach(act => {
-            const imgSrc    = act.user === 'al' ? '/gazpachino.png' : '/pepinillo.png';
-            const isDone    = act.status === 'done';
+            const imgSrc      = act.user === 'al' ? '/gazpachino.png' : '/pepinillo.png';
+            const isDone      = act.status === 'done';
             const statusClass = isDone ? 'done' : 'pending';
             const statusLabel = isDone ? 'Finalizada' : 'Por hacer';
-            const puntos    = act.puntos ?? 1;
+            const puntos      = act.puntos ?? 1;
 
-            // Winner chip (shown when done)
             let winnerChip = '';
             if (isDone && act.winner) {
                 const winnerName  = act.winner === 'al' ? 'Al Pacino' : 'Pepinillo';
@@ -385,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span style="color:${winnerColor};">${escapeHTML(winnerName)}</span>
                 </div>`;
             }
-            
+
             const card = document.createElement('div');
             card.className = 'activity-card';
             card.innerHTML = `
@@ -405,14 +465,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
-            // Dot click: pending → open winner modal; done → revert to pending directly
             card.querySelector('.status-dot').addEventListener('click', async () => {
                 if (!isDone) {
                     openWinnerModal(act.id, puntos);
                 } else {
-                    // Revert to pending — no winner needed
                     try {
-                        const res = await fetch('/api/activity/toggle', {
+                        const res = await authFetch('/api/activity/toggle', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ id: act.id })
@@ -428,18 +486,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Select as next activity button (only for pending)
             if (!isDone) {
                 card.querySelector('.select-next-btn').addEventListener('click', async () => {
                     try {
-                        const res = await fetch('/api/next_activity', {
+                        const res = await authFetch('/api/next_activity', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ id: act.id })
                         });
                         if (res.ok) {
                             fetchNextActivity();
-                            // Visual feedback: briefly highlight the button
                             const btn = card.querySelector('.select-next-btn');
                             btn.classList.add('selected-next');
                             btn.textContent = 'Seleccionada como siguiente';
@@ -462,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchScores() {
         try {
-            const res = await fetch('/api/scores');
+            const res    = await authFetch('/api/scores');
             const scores = await res.json();
             renderClasificacion(scores);
         } catch (e) {
@@ -483,18 +539,16 @@ document.addEventListener('DOMContentLoaded', () => {
             { key: 'pep', name: 'Pepinillo Aceitunillo', avatar: '/pepinillo.png',  points: pepPts, color: '#48a56a' }
         ].sort((a, b) => b.points - a.points);
 
-        const isTie  = players[0].points === players[1].points;
+        const isTie      = players[0].points === players[1].points;
         const rankColors = ['#ffebc9', '#f0f0f0'];
 
         container.innerHTML = '';
 
-        // Title
         const title = document.createElement('h2');
         title.className = 'clasificacion-title';
         title.textContent = 'Clasificación';
         container.appendChild(title);
 
-        // Subtitle: gap or tie
         const subtitle = document.createElement('p');
         subtitle.className = 'clasificacion-subtitle';
         if (isTie && total > 0) {
@@ -507,12 +561,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         container.appendChild(subtitle);
 
-        // Points bar
         if (total > 0) {
             const barWrap = document.createElement('div');
             barWrap.className = 'rank-bar-wrap neo-box';
-            // always order: al on left, pep on right regardless of rank
-            const alW  = Math.round((alPts  / total) * 100);
+            const alW  = Math.round((alPts / total) * 100);
             const pepW = 100 - alW;
             barWrap.innerHTML = `
                 <div class="rank-bar">
@@ -545,14 +597,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function escapeHTML(str) {
-        return str.replace(/[&<>'"]/g, 
-            tag => ({
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                "'": '&#39;',
-                '"': '&quot;'
-            }[tag] || tag)
+        return str.replace(/[&<>'"]/g,
+            tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
         );
     }
 
@@ -565,7 +611,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Interaction Logic (Say Hello)
     const helloBtn = document.getElementById('hello-btn');
     if (helloBtn) {
         helloBtn.addEventListener('click', () => {

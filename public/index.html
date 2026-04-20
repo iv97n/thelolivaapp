@@ -27,7 +27,9 @@
     <div id="login-overlay" class="login-overlay" style="display: flex;">
         <div class="neo-box login-box" style="padding: 2rem; max-width: 90vw;">
             <h2 style="font-family: var(--font-heading); margin-bottom: 2rem;">Tu quien ereh?</h2>
-            <div style="display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap;">
+
+            <!-- Step 1: pick your character -->
+            <div id="login-step-1" style="display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap;">
                 <button class="login-btn neo-box" data-user="al" style="display: flex; flex-direction: column; align-items: center; background: var(--bg-color); cursor: pointer; border: 3px solid #111; padding: 1rem;">
                     <img src="/gazpachino.png" alt="Al Pacino" style="height: 120px; margin-bottom: 1rem; pointer-events: none;">
                     <span style="font-family: var(--font-heading); font-size: 1.25rem; pointer-events: none; color: var(--text-primary);">Al Pacino Gazpachino</span>
@@ -36,6 +38,16 @@
                     <img src="/pepinillo.png" alt="Pepinillo" style="height: 120px; margin-bottom: 1rem; pointer-events: none;">
                     <span style="font-family: var(--font-heading); font-size: 1.25rem; pointer-events: none; color: var(--bg-color);">Pepinillo Aceitunillo</span>
                 </button>
+            </div>
+
+            <!-- Step 2: enter password -->
+            <div id="login-step-2" style="display: none; text-align: center; margin-top: 0.5rem;">
+                <p id="login-selected-label" style="font-family: var(--font-heading); font-size: 1.1rem; margin-bottom: 1rem;"></p>
+                <input type="password" id="login-password" placeholder="Contraseña" autocomplete="current-password"
+                    style="width: 100%; padding: 0.75rem; font-family: var(--font-body); font-size: 1.1rem; border: var(--neo-border); border-radius: 8px; margin-bottom: 0.75rem; box-sizing: border-box;">
+                <button id="login-confirm-btn" class="primary-btn" style="width: 100%; padding: 0.75rem; margin-bottom: 0.75rem;">Entrar</button>
+                <p id="login-error" style="color: #c13a3a; display: none; margin-bottom: 0.75rem; font-family: var(--font-body);">Contraseña incorrecta</p>
+                <button id="login-back-btn" style="background: none; border: none; cursor: pointer; color: var(--text-secondary); font-family: var(--font-body); font-size: 1rem;">← Volver</button>
             </div>
         </div>
     </div>
