@@ -102,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.querySelector('#home-view').classList.contains('active')) {
             fetchNextActivity();
             fetchScores();
+            fetchActivities();
         }
         if (document.querySelector('#map-container svg')) {
             startPolling();
@@ -152,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (targetId === 'home-view') {
                     fetchNextActivity();
                     fetchScores();
+                    fetchActivities();
                 } else if (targetId === 'actividades-view') {
                     fetchActivities();
                 }
@@ -336,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res  = await authFetch('/api/activities');
             const data = await res.json();
             renderActivities(data);
+            renderHistorico(data);
         } catch (e) {
             console.error(e);
         }
@@ -370,11 +373,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const winnerModal    = document.getElementById('winner-modal');
     const winnerModalPts = document.getElementById('winner-modal-pts');
     const winnerCancelBtn = document.getElementById('winner-modal-cancel');
+    const winnerDateInput = document.getElementById('winner-date');
     let _pendingToggleId = null;
+
+    function todayISO() {
+        return new Date().toISOString().slice(0, 10);
+    }
 
     function openWinnerModal(actId, puntos) {
         _pendingToggleId = actId;
         winnerModalPts.textContent = `Esta actividad vale ${puntos} punto${puntos === 1 ? '' : 's'}.`;
+        winnerDateInput.value = todayISO();
         winnerModal.style.display = 'flex';
     }
 
@@ -398,13 +407,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await authFetch('/api/activity/toggle', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: _pendingToggleId, winner })
+                    body: JSON.stringify({ id: _pendingToggleId, winner, completed_at: winnerDateInput.value || null })
                 });
                 if (res.ok) {
                     const data = await res.json();
                     closeWinnerModal();
                     renderActivities(data);
+                    renderHistorico(data);
                     fetchNextActivity();
+                    fetchScores();
                 }
             } catch (e) {
                 console.error(e);
@@ -412,39 +423,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    async function deleteActivity(id) {
+        try {
+            const res = await authFetch('/api/activity/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                renderActivities(data);
+                renderHistorico(data);
+                fetchNextActivity();
+            } else {
+                console.error('Delete failed, status:', res.status, await res.text());
+                fetchActivities();
+            }
+        } catch (e) {
+            console.error('Delete error:', e);
+            fetchActivities();
+        }
+    }
+
     function renderActivities(activitiesList) {
         const feedContainer = document.getElementById('activity-feed');
         if (!feedContainer) return;
 
         feedContainer.innerHTML = '';
 
-        if (activitiesList.length === 0) {
-            feedContainer.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">No hay actividades todavía.</p>';
+        const pending = activitiesList.filter(a => a.status === 'pending');
+
+        if (pending.length === 0) {
+            feedContainer.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">No hay actividades pendientes.</p>';
             return;
         }
 
-        const sorted = [...activitiesList].sort((a, b) => {
-            if (a.status === b.status) return 0;
-            return a.status === 'pending' ? -1 : 1;
-        });
-
-        sorted.forEach(act => {
-            const imgSrc      = act.user === 'al' ? '/gazpachino.png' : '/pepinillo.png';
-            const isDone      = act.status === 'done';
-            const statusClass = isDone ? 'done' : 'pending';
-            const statusLabel = isDone ? 'Finalizada' : 'Por hacer';
-            const puntos      = act.puntos ?? 1;
-
-            let winnerChip = '';
-            if (isDone && act.winner) {
-                const winnerName  = act.winner === 'al' ? 'Al Pacino' : 'Pepinillo';
-                const winnerColor = act.winner === 'al' ? '#c13a3a' : '#48a56a';
-                const winnerImg   = act.winner === 'al' ? '/gazpachino.png' : '/pepinillo.png';
-                winnerChip = `<div class="winner-chip" style="border-color:${winnerColor};">
-                    <img src="${winnerImg}" class="winner-chip-avatar">
-                    <span style="color:${winnerColor};">${escapeHTML(winnerName)}</span>
-                </div>`;
-            }
+        pending.forEach(act => {
+            const imgSrc  = act.user === 'al' ? '/gazpachino.png' : '/pepinillo.png';
+            const puntos  = act.puntos ?? 1;
 
             const card = document.createElement('div');
             card.className = 'activity-card';
@@ -456,62 +472,105 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="pts-badge">${puntos} pt${puntos === 1 ? '' : 's'}</span>
                     </div>
                     <p>${escapeHTML(act.descripcion)}</p>
-                    ${winnerChip}
-                    ${!isDone ? `<button class="select-next-btn" data-id="${act.id}">Seleccionar como siguiente actividad</button>` : ''}
+                    <button class="select-next-btn" data-id="${act.id}">Seleccionar como siguiente actividad</button>
                 </div>
-                <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-                    <div class="status-dot ${statusClass}" data-id="${act.id}" title="${statusLabel}"></div>
-                    <span class="status-label">${statusLabel}</span>
+                <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+                    <div class="status-dot pending" title="Marcar como completada"></div>
+                    <span class="status-label">Por hacer</span>
+                    <button class="delete-btn" title="Eliminar"><svg style="pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/><path d="M9 6V4h6v2"/></svg></button>
                 </div>
             `;
 
-            card.querySelector('.status-dot').addEventListener('click', async () => {
-                if (!isDone) {
-                    openWinnerModal(act.id, puntos);
-                } else {
-                    try {
-                        const res = await authFetch('/api/activity/toggle', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: act.id })
-                        });
-                        if (res.ok) {
-                            const data = await res.json();
-                            renderActivities(data);
-                            fetchNextActivity();
-                        }
-                    } catch (e) {
-                        console.error(e);
+            card.querySelector('.status-dot').addEventListener('click', () => openWinnerModal(act.id, puntos));
+
+            card.querySelector('.delete-btn').addEventListener('click', () => deleteActivity(act.id));
+
+            card.querySelector('.select-next-btn').addEventListener('click', async () => {
+                try {
+                    const res = await authFetch('/api/next_activity', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: act.id })
+                    });
+                    if (res.ok) {
+                        fetchNextActivity();
+                        const btn = card.querySelector('.select-next-btn');
+                        btn.classList.add('selected-next');
+                        btn.textContent = 'Seleccionada como siguiente';
+                        setTimeout(() => {
+                            btn.classList.remove('selected-next');
+                            btn.innerHTML = 'Seleccionar como siguiente actividad';
+                        }, 2000);
                     }
+                } catch (e) {
+                    console.error(e);
                 }
             });
 
-            if (!isDone) {
-                card.querySelector('.select-next-btn').addEventListener('click', async () => {
-                    try {
-                        const res = await authFetch('/api/next_activity', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: act.id })
-                        });
-                        if (res.ok) {
-                            fetchNextActivity();
-                            const btn = card.querySelector('.select-next-btn');
-                            btn.classList.add('selected-next');
-                            btn.textContent = 'Seleccionada como siguiente';
-                            setTimeout(() => {
-                                btn.classList.remove('selected-next');
-                                btn.innerHTML = 'Seleccionar como siguiente actividad';
-                            }, 2000);
-                        }
-                    } catch (e) {
-                        console.error(e);
-                    }
-                });
-            }
-
             feedContainer.appendChild(card);
         });
+    }
+
+    function formatDate(ts) {
+        return new Date(ts * 1000).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    function renderHistorico(activitiesList) {
+        const feed = document.getElementById('historico-feed');
+        if (!feed) return;
+
+        const done = activitiesList
+            .filter(a => a.status === 'done')
+            .sort((a, b) => (b.completed_at || b.timestamp) - (a.completed_at || a.timestamp));
+
+        if (done.length === 0) {
+            feed.innerHTML = '<p style="text-align:center; color:var(--text-secondary); font-size:1.1rem; font-weight:600;">Aún no hay histórico.</p>';
+            return;
+        }
+
+        feed.innerHTML = '';
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.gap = '1rem';
+
+        done.forEach(act => {
+            const imgSrc      = act.user === 'al' ? '/gazpachino.png' : '/pepinillo.png';
+            const winnerName  = act.winner === 'al' ? 'Al Pacino' : 'Pepinillo';
+            const winnerColor = act.winner === 'al' ? '#c13a3a' : '#48a56a';
+            const winnerImg   = act.winner === 'al' ? '/gazpachino.png' : '/pepinillo.png';
+            const puntos      = act.puntos ?? 1;
+            const dateStr     = act.completed_at ? formatDate(act.completed_at) : formatDate(act.timestamp);
+
+            const entry = document.createElement('div');
+            entry.innerHTML = `
+                <p class="historico-date">${dateStr}</p>
+                <div class="activity-card">
+                    <img src="${imgSrc}" class="activity-avatar" alt="Avatar">
+                    <div class="activity-content">
+                        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                            <h4>${escapeHTML(act.titulo)}</h4>
+                            <span class="pts-badge">${puntos} pt${puntos === 1 ? '' : 's'}</span>
+                        </div>
+                        <p>${escapeHTML(act.descripcion)}</p>
+                        <div class="winner-chip" style="border-color:${winnerColor};">
+                            <img src="${winnerImg}" class="winner-chip-avatar">
+                            <span style="color:${winnerColor};">${winnerName}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+                        <div class="status-dot done" title="Finalizada"></div>
+                        <span class="status-label">Finalizada</span>
+                        <button class="delete-btn" title="Eliminar"><svg style="pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/><path d="M9 6V4h6v2"/></svg></button>
+                    </div>
+                </div>
+            `;
+
+            entry.querySelector('.delete-btn').addEventListener('click', () => deleteActivity(act.id));
+            wrapper.appendChild(entry);
+        });
+
+        feed.appendChild(wrapper);
     }
 
     // -- Clasificacion Logic --

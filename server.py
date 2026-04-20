@@ -2,6 +2,7 @@ import json
 import os
 import secrets
 import time
+from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 DATA_FILE = os.environ.get('DATA_FILE', '/data/state.json')
@@ -177,11 +178,27 @@ class TheLolivaAppBackendHandler(SimpleHTTPRequestHandler):
                             if winner not in ('al', 'pep'): break
                             act['status'] = 'done'
                             act['winner'] = winner
+                            completed_at_str = data.get('completed_at')
+                            try:
+                                act['completed_at'] = datetime.strptime(completed_at_str, '%Y-%m-%d').timestamp() if completed_at_str else time.time()
+                            except Exception:
+                                act['completed_at'] = time.time()
                         else:
                             act['status'] = 'pending'
                             act['winner'] = None
                         save_state()
                         self._send_json(200, ACTIVITIES); return
+            except Exception:
+                pass
+            self._send_json(400, {'error': 'Bad request'})
+
+        elif self.path == '/api/activity/delete':
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                activity_id = data.get('id')
+                ACTIVITIES[:] = [a for a in ACTIVITIES if a.get('id') != activity_id]
+                save_state()
+                self._send_json(200, ACTIVITIES); return
             except Exception:
                 pass
             self._send_json(400, {'error': 'Bad request'})

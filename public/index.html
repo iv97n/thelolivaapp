@@ -55,7 +55,7 @@
     <main class="glass-container" id="app-container" style="display: none;">
         <header>
             <div class="logo">
-                <img src="/logo.svg" alt="App Logo" width="48" height="48" style="border-radius: 10px;">
+                <img src="/logoweb.svg" alt="App Logo" width="48" height="48" style="border-radius: 10px;">
                 <h1>the Loliva App</h1>
             </div>
             <div></div>
@@ -78,7 +78,7 @@
 
             <div id="historico-section" class="neo-box" style="padding:1.25rem; margin-bottom:1.5rem; background:var(--card-bg);">
                 <h2 class="clasificacion-title" style="margin-bottom: 1rem;">Histórico</h2>
-                <div id="historico-feed" style="text-align:center; color:var(--text-secondary); font-size:1.1rem; font-weight:600;">
+                <div id="historico-feed">
                     Aún no hay histórico.
                 </div>
             </div>
@@ -121,6 +121,10 @@
         <div class="winner-modal-box neo-box">
             <h3 class="winner-modal-title">¿Quién ganó?</h3>
             <p class="winner-modal-subtitle" id="winner-modal-pts"></p>
+            <div style="margin-bottom: 1.25rem; text-align: left;">
+                <label for="winner-date" style="font-family: var(--font-body); font-size: 0.9rem; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">Fecha completada</label>
+                <input type="date" id="winner-date" class="neo-input" style="padding: 0.5rem 0.75rem; font-family: var(--font-body); font-size: 1rem; border: var(--neo-border); border-radius: 8px; width: 100%;">
+            </div>
             <div class="winner-modal-choices">
                 <button class="winner-choice-btn" id="winner-btn-al" data-winner="al">
                     <img src="/gazpachino.png" alt="Al Pacino" class="winner-choice-avatar">
