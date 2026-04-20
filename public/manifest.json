@@ -1,27 +1,18 @@
 {
     "name": "the Loliva App",
-    "short_name": "Loliva",
-    "description": "A beautiful containerized Progressive Web App starter template.",
+    "short_name": "the Loliva App",
+    "description": "the Loliva App",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#0f172a",
-    "theme_color": "#121212",
+    "background_color": "#D2A067",
+    "theme_color": "#D2A067",
     "orientation": "portrait-primary",
     "icons": [
         {
-            "src": "/icon.svg",
+            "src": "/logo.svg",
             "type": "image/svg+xml",
-            "sizes": "any"
-        },
-        {
-            "src": "/icon.svg",
-            "type": "image/svg+xml",
-            "sizes": "192x192"
-        },
-        {
-            "src": "/icon.svg",
-            "type": "image/svg+xml",
-            "sizes": "512x512"
+            "sizes": "any",
+            "purpose": "any maskable"
         }
     ]
 }

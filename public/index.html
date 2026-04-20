@@ -9,8 +9,8 @@
     
     <!-- thelolivaapp Manifest -->
     <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/svg+xml" href="/print1.svg">
-    <link rel="apple-touch-icon" href="/print1.svg">
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <link rel="apple-touch-icon" href="/logo.svg">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,13 +55,10 @@
     <main class="glass-container" id="app-container" style="display: none;">
         <header>
             <div class="logo">
-                <img src="/print1.svg" alt="App Logo" width="48" height="48">
+                <img src="/logo.svg" alt="App Logo" width="48" height="48" style="border-radius: 10px;">
                 <h1>the Loliva App</h1>
             </div>
-            <div style="display: flex; gap: 1rem; align-items: center;">
-                
-                <button id="logout-btn" class="primary-btn" style="padding: 0.5rem 1rem; font-size: 1rem;">Logout</button>
-            </div>
+            <div></div>
         </header>
 
         <nav class="tabs-nav">
@@ -114,6 +111,9 @@
         </div>
 
 
+        <div style="text-align: center; padding: 2rem 0 0.5rem;">
+            <button id="logout-btn" style="background: none; border: none; color: var(--text-secondary); font-family: var(--font-body); font-size: 0.85rem; cursor: pointer; opacity: 0.5;">Cerrar sesión</button>
+        </div>
     </main>
 
     <!-- Winner Picker Modal -->

@@ -561,24 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         container.appendChild(subtitle);
 
-        if (total > 0) {
-            const barWrap = document.createElement('div');
-            barWrap.className = 'rank-bar-wrap neo-box';
-            const alW  = Math.round((alPts / total) * 100);
-            const pepW = 100 - alW;
-            barWrap.innerHTML = `
-                <div class="rank-bar">
-                    <div class="rank-bar-segment" style="width:${alW}%; background:#c13a3a;" title="Al Pacino: ${alPts}pts"></div>
-                    <div class="rank-bar-segment" style="width:${pepW}%; background:#48a56a;" title="Pepinillo: ${pepPts}pts"></div>
-                </div>
-                <div class="rank-bar-labels">
-                    <span style="color:#c13a3a;">Al ${alW}%</span>
-                    <span style="color:#48a56a;">Pep ${pepW}%</span>
-                </div>
-            `;
-            container.appendChild(barWrap);
-        }
-
         players.forEach((player, idx) => {
             const isFirst = idx === 0;
             const card = document.createElement('div');
