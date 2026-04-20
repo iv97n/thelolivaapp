@@ -107,7 +107,84 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.querySelector('#map-container svg')) {
             startPolling();
         }
+        subscribeToPush();
     }
+
+    // -- Push Notifications --
+    function urlBase64ToUint8Array(base64) {
+        const pad = '='.repeat((4 - base64.length % 4) % 4);
+        const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = atob(b64);
+        return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+
+    async function subscribeToPush() {
+        if (!('PushManager' in window) || !('serviceWorker' in navigator)) return;
+        try {
+            const keyRes = await fetch('/api/push/key');
+            if (!keyRes.ok) return;
+            const { publicKey } = await keyRes.json();
+
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') return;
+
+            const reg = await navigator.serviceWorker.ready;
+            let subscription = await reg.pushManager.getSubscription();
+            if (!subscription) {
+                subscription = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicKey),
+                });
+            }
+            await authFetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subscription.toJSON()),
+            });
+        } catch (e) {
+            console.error('Push subscription error:', e);
+        }
+    }
+
+    // -- Schedule Activity Modal --
+    const scheduleModal      = document.getElementById('schedule-modal');
+    const scheduleModalName  = document.getElementById('schedule-modal-name');
+    const scheduleDateInput  = document.getElementById('schedule-date');
+    const scheduleConfirmBtn = document.getElementById('schedule-confirm-btn');
+    const scheduleCancelBtn  = document.getElementById('schedule-cancel-btn');
+    let _pendingScheduleId   = null;
+
+    function openScheduleModal(actId, actTitle) {
+        _pendingScheduleId = actId;
+        scheduleModalName.textContent = actTitle;
+        scheduleDateInput.value = todayISO();
+        scheduleModal.style.display = 'flex';
+    }
+
+    function closeScheduleModal() {
+        scheduleModal.style.display = 'none';
+        _pendingScheduleId = null;
+    }
+
+    scheduleCancelBtn.addEventListener('click', closeScheduleModal);
+    scheduleModal.addEventListener('click', e => { if (e.target === scheduleModal) closeScheduleModal(); });
+
+    scheduleConfirmBtn.addEventListener('click', async () => {
+        if (!_pendingScheduleId || !scheduleDateInput.value) return;
+        try {
+            const res = await authFetch('/api/next_activity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: _pendingScheduleId, date: scheduleDateInput.value }),
+            });
+            if (res.ok) {
+                closeScheduleModal();
+                fetchNextActivity();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    });
 
     // Auto-login from saved token
     const savedToken = localStorage.getItem('lolivaToken');
@@ -356,13 +433,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderNextActivityBanner(act) {
         const banner  = document.getElementById('next-activity-banner');
-        const titleEl = document.getElementById('next-activity-title');
-        const descEl  = document.getElementById('next-activity-desc');
-        if (!banner || !titleEl || !descEl) return;
+        const cardEl  = document.getElementById('next-activity-card');
+        if (!banner || !cardEl) return;
 
         if (act && act.status !== 'done') {
-            titleEl.textContent = act.titulo;
-            descEl.textContent  = act.descripcion;
+            const imgSrc = act.user === 'al' ? '/gazpachino.png' : '/pepinillo.png';
+            const puntos = act.puntos ?? 1;
+            const dateStr = act.scheduled_date
+                ? formatDate(new Date(act.scheduled_date).getTime() / 1000)
+                : null;
+
+            cardEl.innerHTML = `
+                <div class="activity-card" style="background:#ffebc9;">
+                    <img src="${imgSrc}" class="activity-avatar" alt="Avatar">
+                    <div class="activity-content">
+                        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                            <h4>${escapeHTML(act.titulo)}</h4>
+                            <span class="pts-badge">${puntos} pt${puntos === 1 ? '' : 's'}</span>
+                        </div>
+                        <p>${escapeHTML(act.descripcion)}</p>
+                        ${dateStr ? `<p style="font-family:var(--font-heading); font-size:0.85rem; color:var(--accent-color); margin-top:0.4rem;">${dateStr}</p>` : ''}
+                    </div>
+                </div>
+            `;
             banner.style.display = 'block';
         } else {
             banner.style.display = 'none';
@@ -373,7 +466,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const winnerModal    = document.getElementById('winner-modal');
     const winnerModalPts = document.getElementById('winner-modal-pts');
     const winnerCancelBtn = document.getElementById('winner-modal-cancel');
-    const winnerDateInput = document.getElementById('winner-date');
+    const winnerDateInput  = document.getElementById('winner-date');
+    const winnerExtraInput = document.getElementById('winner-extra');
     let _pendingToggleId = null;
 
     function todayISO() {
@@ -384,6 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
         _pendingToggleId = actId;
         winnerModalPts.textContent = `Esta actividad vale ${puntos} punto${puntos === 1 ? '' : 's'}.`;
         winnerDateInput.value = todayISO();
+        winnerExtraInput.value = '';
         winnerModal.style.display = 'flex';
     }
 
@@ -407,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await authFetch('/api/activity/toggle', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: _pendingToggleId, winner, completed_at: winnerDateInput.value || null })
+                    body: JSON.stringify({ id: _pendingToggleId, winner, completed_at: winnerDateInput.value || null, extra: parseInt(winnerExtraInput.value) || 0 })
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -485,26 +580,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             card.querySelector('.delete-btn').addEventListener('click', () => deleteActivity(act.id));
 
-            card.querySelector('.select-next-btn').addEventListener('click', async () => {
-                try {
-                    const res = await authFetch('/api/next_activity', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: act.id })
-                    });
-                    if (res.ok) {
-                        fetchNextActivity();
-                        const btn = card.querySelector('.select-next-btn');
-                        btn.classList.add('selected-next');
-                        btn.textContent = 'Seleccionada como siguiente';
-                        setTimeout(() => {
-                            btn.classList.remove('selected-next');
-                            btn.innerHTML = 'Seleccionar como siguiente actividad';
-                        }, 2000);
-                    }
-                } catch (e) {
-                    console.error(e);
-                }
+            card.querySelector('.select-next-btn').addEventListener('click', () => {
+                openScheduleModal(act.id, act.titulo);
             });
 
             feedContainer.appendChild(card);
@@ -551,6 +628,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                             <h4>${escapeHTML(act.titulo)}</h4>
                             <span class="pts-badge">${puntos} pt${puntos === 1 ? '' : 's'}</span>
+                            ${act.extra > 0 ? `<span class="pts-badge" style="background:#48a56a; color:#fff;">+${act.extra} extra</span>` : ''}
                         </div>
                         <p>${escapeHTML(act.descripcion)}</p>
                         <div class="winner-chip" style="border-color:${winnerColor};">
