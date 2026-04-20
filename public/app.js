@@ -97,6 +97,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const paths = mapContainer.querySelectorAll('svg path, svg polygon');
             paths.forEach(path => {
                 path.addEventListener('click', () => handleMapClick(path));
+
+                // On iOS, panzoom intercepts touch events and prevents click synthesis.
+                // Detect taps manually: fire only if finger barely moved (tap, not pan).
+                let touchStartX, touchStartY;
+                path.addEventListener('touchstart', (e) => {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                }, { passive: true });
+                path.addEventListener('touchend', (e) => {
+                    const dx = e.changedTouches[0].clientX - touchStartX;
+                    const dy = e.changedTouches[0].clientY - touchStartY;
+                    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+                        e.preventDefault(); // prevent duplicate click event
+                        handleMapClick(path);
+                    }
+                });
             });
 
             // Initialize panzoom
