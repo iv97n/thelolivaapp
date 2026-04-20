@@ -385,9 +385,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const titulo      = titleInput.value.trim();
             const descripcion = descInput.value.trim();
-            const puntos      = parseInt(puntosInput.value, 10);
+            const puntos      = parseFloat(puntosInput.value);
 
-            if (!titulo || !descripcion || !puntos || puntos < 1) return;
+            if (!titulo || !descripcion || isNaN(puntos) || puntos < 0) return;
 
             try {
                 const res = await authFetch('/api/activity', {
@@ -502,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await authFetch('/api/activity/toggle', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: _pendingToggleId, winner, completed_at: winnerDateInput.value || null, extra: parseInt(winnerExtraInput.value) || 0 })
+                    body: JSON.stringify({ id: _pendingToggleId, winner, completed_at: winnerDateInput.value || null, extra: parseFloat(winnerExtraInput.value) || 0 })
                 });
                 if (res.ok) {
                     const data = await res.json();

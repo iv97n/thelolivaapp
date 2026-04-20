@@ -256,7 +256,7 @@ class TheLolivaAppBackendHandler(SimpleHTTPRequestHandler):
                 data        = json.loads(post_data.decode('utf-8'))
                 titulo      = data.get('titulo')
                 descripcion = data.get('descripcion')
-                puntos      = int(data.get('puntos', 1))
+                puntos      = float(data.get('puntos', 1))
                 if titulo and descripcion:
                     activity = {
                         "id":          str(int(time.time() * 1000)),
@@ -292,7 +292,7 @@ class TheLolivaAppBackendHandler(SimpleHTTPRequestHandler):
                             except Exception:
                                 act['completed_at'] = time.time()
                             try:
-                                act['extra'] = max(0, int(data.get('extra') or 0))
+                                act['extra'] = max(0, float(data.get('extra') or 0))
                             except Exception:
                                 act['extra'] = 0
                         else:
